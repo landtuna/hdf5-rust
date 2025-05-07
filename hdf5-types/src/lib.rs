@@ -32,7 +32,9 @@ pub use self::h5type::{
     CompoundField, CompoundType, EnumMember, EnumType, FloatSize, H5Type, IntSize, TypeDescriptor,
 };
 pub use self::references::Reference;
-pub use self::string::{FixedAscii, FixedUnicode, StringError, VarLenAscii, VarLenUnicode};
+pub use self::string::{
+    FixedAscii, FixedAsciiOdim, FixedUnicode, StringError, VarLenAscii, VarLenUnicode,
+};
 
 pub(crate) unsafe fn malloc(n: usize) -> *mut core::ffi::c_void {
     cfg_if::cfg_if! {

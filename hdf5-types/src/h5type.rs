@@ -4,7 +4,7 @@ use std::os::raw::c_void;
 
 use crate::array::VarLenArray;
 use crate::references::Reference;
-use crate::string::{FixedAscii, FixedUnicode, VarLenAscii, VarLenUnicode};
+use crate::string::{FixedAscii, FixedAsciiOdim, FixedUnicode, VarLenAscii, VarLenUnicode};
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
@@ -156,6 +156,7 @@ pub enum TypeDescriptor {
     Compound(CompoundType),
     FixedArray(Box<Self>, usize),
     FixedAscii(usize),
+    FixedAsciiOdim(usize),
     FixedUnicode(usize),
     VarLenArray(Box<Self>),
     VarLenAscii,
@@ -183,6 +184,7 @@ impl Display for TypeDescriptor {
             TypeDescriptor::Compound(ref tp) => write!(f, "compound ({} fields)", tp.fields.len()),
             TypeDescriptor::FixedArray(ref tp, n) => write!(f, "[{}; {}]", tp, n),
             TypeDescriptor::FixedAscii(n) => write!(f, "string (len {})", n),
+            TypeDescriptor::FixedAsciiOdim(n) => write!(f, "ODIM string (len {})", n),
             TypeDescriptor::FixedUnicode(n) => write!(f, "unicode (len {})", n),
             TypeDescriptor::VarLenArray(ref tp) => write!(f, "[{}] (var len)", tp),
             TypeDescriptor::VarLenAscii => write!(f, "string (var len)"),
@@ -204,7 +206,7 @@ impl TypeDescriptor {
             Self::Enum(ref enum_type) => enum_type.size as _,
             Self::Compound(ref compound) => compound.size,
             Self::FixedArray(ref ty, len) => ty.size() * len,
-            Self::FixedAscii(len) | Self::FixedUnicode(len) => len,
+            Self::FixedAscii(len) | Self::FixedAsciiOdim(len) | Self::FixedUnicode(len) => len,
             Self::VarLenArray(_) => mem::size_of::<hvl_t>(),
             Self::VarLenAscii | Self::VarLenUnicode => mem::size_of::<*const u8>(),
             Self::Reference(reftyp) => reftyp.size(),
@@ -217,7 +219,7 @@ impl TypeDescriptor {
                 compound.fields.iter().map(|f| f.ty.c_alignment()).max().unwrap_or(1)
             }
             Self::FixedArray(ref ty, _) => ty.c_alignment(),
-            Self::FixedAscii(_) | Self::FixedUnicode(_) => 1,
+            Self::FixedAscii(_) | Self::FixedAsciiOdim(_) | Self::FixedUnicode(_) => 1,
             Self::VarLenArray(_) => mem::size_of::<usize>(),
             _ => self.size(),
         }
@@ -360,6 +362,13 @@ unsafe impl<const N: usize> H5Type for FixedAscii<N> {
     }
 }
 
+unsafe impl<const N: usize> H5Type for FixedAsciiOdim<N> {
+    #[inline]
+    fn type_descriptor() -> TypeDescriptor {
+        TypeDescriptor::FixedAsciiOdim(N)
+    }
+}
+
 unsafe impl<const N: usize> H5Type for FixedUnicode<N> {
     #[inline]
     fn type_descriptor() -> TypeDescriptor {
@@ -386,7 +395,7 @@ pub mod tests {
     use super::TypeDescriptor as TD;
     use super::{hvl_t, FloatSize, H5Type, IntSize};
     use crate::array::VarLenArray;
-    use crate::string::{FixedAscii, FixedUnicode, VarLenAscii, VarLenUnicode};
+    use crate::string::{FixedAscii, FixedAsciiOdim, FixedUnicode, VarLenAscii, VarLenUnicode};
     use std::mem;
 
     #[test]
@@ -445,8 +454,10 @@ pub mod tests {
     #[test]
     pub fn test_string_types() {
         type FA = FixedAscii<16>;
+        type FAO = FixedAsciiOdim<16>;
         type FU = FixedUnicode<32>;
         assert_eq!(FA::type_descriptor(), TD::FixedAscii(16));
+        assert_eq!(FAO::type_descriptor(), TD::FixedAsciiOdim(16));
         assert_eq!(FU::type_descriptor(), TD::FixedUnicode(32));
         assert_eq!(VarLenAscii::type_descriptor(), TD::VarLenAscii);
         assert_eq!(VarLenUnicode::type_descriptor(), TD::VarLenUnicode);

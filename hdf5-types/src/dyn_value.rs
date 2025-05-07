@@ -700,6 +700,7 @@ impl<'a> DynValue<'a> {
             FixedArray(ref tp, n) => DynArray::new(tp, buf, Some(*n)).into(),
             VarLenArray(ref tp) => DynArray::new(tp, buf, None).into(),
             FixedAscii(_) => DynFixedString::new(buf, false).into(),
+            FixedAsciiOdim(_) => DynFixedString::new(buf, false).into(),
             FixedUnicode(_) => DynFixedString::new(buf, true).into(),
             VarLenAscii => DynVarLenString::new(buf, false).into(),
             VarLenUnicode => DynVarLenString::new(buf, true).into(),
@@ -859,7 +860,7 @@ mod tests {
 
     use crate::array::VarLenArray;
     use crate::h5type::{TypeDescriptor as TD, *};
-    use crate::string::{FixedAscii, FixedUnicode, VarLenAscii, VarLenUnicode};
+    use crate::string::{FixedAscii, FixedAsciiOdim, FixedUnicode, VarLenAscii, VarLenUnicode};
 
     use super::*;
 
@@ -884,6 +885,7 @@ mod tests {
     struct Data {
         points: VarLenArray<Point>,
         fa: FixedAscii<5>,
+        fao: FixedAsciiOdim<5>,
         fu: FixedUnicode<5>,
         va: VarLenAscii,
         vu: VarLenUnicode,
@@ -932,6 +934,7 @@ mod tests {
                 [
                     CompoundField::new("points", points, 0, 0),
                     CompoundField::new("fa", TD::FixedAscii(5), 16, 1),
+                    CompoundField::new("fao", TD::FixedAsciiOdim(5), 16, 1),
                     CompoundField::new("fu", TD::FixedUnicode(5), 21, 2),
                     CompoundField::new("va", TD::VarLenAscii, 32, 3),
                     CompoundField::new("vu", TD::VarLenUnicode, 40, 4),
@@ -1003,6 +1006,7 @@ mod tests {
                     .as_ref(),
                 ),
                 fa: FixedAscii::from_ascii(b"12345").unwrap(),
+                fao: FixedAsciiOdim::from_ascii(b"12345").unwrap(),
                 fu: FixedUnicode::from_str("∀").unwrap(),
                 va: VarLenAscii::from_ascii(b"wat").unwrap(),
                 vu: VarLenUnicode::from_str("⨁∀").unwrap(),
@@ -1018,6 +1022,7 @@ mod tests {
             data: Data {
                 points: VarLenArray::from_slice([].as_ref()),
                 fa: FixedAscii::from_ascii(b"").unwrap(),
+                fao: FixedAsciiOdim::from_ascii(b"").unwrap(),
                 fu: FixedUnicode::from_str("").unwrap(),
                 va: VarLenAscii::from_ascii(b"").unwrap(),
                 vu: VarLenUnicode::from_str("").unwrap(),
