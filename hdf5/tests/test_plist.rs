@@ -721,7 +721,9 @@ fn test_dcpl_fill_time() -> hdf5::Result<()> {
 #[test]
 fn test_dcpl_fill_value() -> hdf5::Result<()> {
     use hdf5_derive::H5Type;
-    use hdf5_types::{FixedAscii, FixedUnicode, VarLenArray, VarLenAscii, VarLenUnicode};
+    use hdf5_types::{
+        FixedAscii, FixedAsciiOdim, FixedUnicode, VarLenArray, VarLenAscii, VarLenUnicode,
+    };
 
     check_matches!(DC::try_new()?.get_fill_value_defined()?, (), FillValue::Default);
     check_matches!(DC::try_new()?.fill_value_defined(), (), FillValue::Default);
@@ -740,6 +742,7 @@ fn test_dcpl_fill_value() -> hdf5::Result<()> {
     #[repr(C)]
     struct Data {
         a: FixedAscii<5>,
+        ao: FixedAsciiOdim<5>,
         b: FixedUnicode<5>,
         c: [i16; 2],
         d: VarLenAscii,
@@ -749,6 +752,7 @@ fn test_dcpl_fill_value() -> hdf5::Result<()> {
 
     let data = Data {
         a: FixedAscii::from_ascii(b"12345").unwrap(),
+        ao: FixedAsciiOdim::from_ascii(b"12345").unwrap(),
         b: FixedUnicode::from_str("abcd").unwrap(),
         c: [123i16, -1i16],
         d: VarLenAscii::from_ascii(b"xy").unwrap(),

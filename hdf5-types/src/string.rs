@@ -175,6 +175,7 @@ macro_rules! impl_string_traits {
 }
 
 impl_string_traits!(FixedAscii<N>, const N: usize);
+impl_string_traits!(FixedAsciiOdim<N>, const N: usize);
 impl_string_traits!(FixedUnicode<N>, const N: usize);
 impl_string_traits!(VarLenAscii);
 impl_string_traits!(VarLenUnicode);
@@ -479,6 +480,100 @@ impl<const N: usize> AsAsciiStr for FixedAscii<N> {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+pub struct FixedAsciiOdim<const N: usize> {
+    buf: [u8; N],
+}
+
+impl<const N: usize> FixedAsciiOdim<N> {
+    #[inline]
+    pub fn new() -> Self {
+        unsafe { Self { buf: mem::zeroed() } }
+    }
+
+    #[inline]
+    unsafe fn from_bytes(bytes: &[u8]) -> Self {
+        let len = if bytes.len() < N { bytes.len() } else { N };
+        let mut buf: [u8; N] = mem::zeroed();
+        ptr::copy_nonoverlapping(bytes.as_ptr(), buf.as_mut_ptr().cast(), len);
+        Self { buf }
+    }
+
+    #[inline]
+    fn as_raw_slice(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.buf.as_ptr(), N) }
+    }
+
+    #[inline]
+    pub const fn capacity() -> usize {
+        N
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.as_raw_slice().iter().rev().skip_while(|&c| *c == 0).count()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.as_raw_slice().iter().all(|&c| c == 0)
+    }
+
+    #[inline]
+    pub fn as_ptr(&self) -> *const u8 {
+        self.buf.as_ptr()
+    }
+
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.as_raw_slice()[..self.len()]
+    }
+
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        unsafe { str::from_utf8_unchecked(self.as_bytes()) }
+    }
+
+    #[inline]
+    pub unsafe fn from_ascii_unchecked<B: ?Sized + AsRef<[u8]>>(bytes: &B) -> Self {
+        Self::from_bytes(bytes.as_ref())
+    }
+
+    pub fn from_ascii<B: ?Sized + AsRef<[u8]>>(bytes: &B) -> Result<Self, StringError> {
+        let bytes = bytes.as_ref();
+        if bytes.len() > N {
+            return Err(StringError::InsufficientCapacity);
+        }
+        let s = AsciiStr::from_ascii(bytes)?;
+        unsafe { Ok(Self::from_bytes(s.as_bytes())) }
+    }
+}
+
+impl<const N: usize> AsAsciiStr for FixedAsciiOdim<N> {
+    type Inner = u8;
+
+    #[inline]
+    fn slice_ascii<R>(&self, range: R) -> Result<&AsciiStr, AsAsciiStrError>
+    where
+        R: SliceIndex<[u8], Output = [u8]>,
+    {
+        self.as_bytes().slice_ascii(range)
+    }
+
+    #[inline]
+    fn as_ascii_str(&self) -> Result<&AsciiStr, AsAsciiStrError> {
+        AsciiStr::from_ascii(self.as_bytes())
+    }
+
+    #[inline]
+    unsafe fn as_ascii_str_unchecked(&self) -> &AsciiStr {
+        AsciiStr::from_ascii_unchecked(self.as_bytes())
+    }
+}
+
+// ================================================================================
+
+#[repr(C)]
+#[derive(Copy, Clone)]
 pub struct FixedUnicode<const N: usize> {
     buf: [u8; N],
 }
@@ -572,6 +667,7 @@ pub mod tests {
     type VA = VarLenAscii;
     type VU = VarLenUnicode;
     type FA = FixedAscii<1024>;
+    type FAO = FixedAsciiOdim<1024>;
     type FU = FixedUnicode<1024>;
 
     #[derive(Clone, Debug)]
@@ -634,9 +730,12 @@ pub mod tests {
     #[test]
     pub fn test_capacity() {
         type A = FixedAscii<2>;
+        type AO = FixedAsciiOdim<2>;
         type U = FixedUnicode<2>;
         assert_eq!(A::from_ascii("ab").unwrap().as_str(), "ab");
         assert!(A::from_ascii("abc").is_err());
+        assert_eq!(AO::from_ascii("ab").unwrap().as_str(), "ab");
+        assert!(AO::from_ascii("abc").is_err());
         assert_eq!(U::from_str("ab").unwrap().as_str(), "ab");
         assert!(U::from_str("abc").is_err());
         assert_eq!(U::from_str("®").unwrap().as_str(), "®");
@@ -649,15 +748,21 @@ pub mod tests {
         assert!(VA::from_ascii("€").is_err());
         assert!(FA::from_ascii("®").is_err());
         assert!(FA::from_ascii("€").is_err());
+        assert!(FAO::from_ascii("®").is_err());
+        assert!(FAO::from_ascii("€").is_err());
     }
 
     #[test]
     pub fn test_null_padding() {
         type A = FixedAscii<3>;
+        type AO = FixedAsciiOdim<3>;
         type U = FixedUnicode<3>;
         assert_eq!(A::from_ascii("a\0b").unwrap().as_str(), "a\0b");
         assert_eq!(A::from_ascii("a\0\0").unwrap().as_str(), "a");
         assert!(A::from_ascii("\0\0\0").unwrap().is_empty());
+        assert_eq!(AO::from_ascii("a\0b").unwrap().as_str(), "a\0b");
+        assert_eq!(AO::from_ascii("a\0\0").unwrap().as_str(), "a");
+        assert!(AO::from_ascii("\0\0\0").unwrap().is_empty());
         assert_eq!(U::from_str("a\0b").unwrap().as_str(), "a\0b");
         assert_eq!(U::from_str("a\0\0").unwrap().as_str(), "a");
         assert!(U::from_str("\0\0\0").unwrap().is_empty());
@@ -679,6 +784,7 @@ pub mod tests {
 
     test_default!(test_default_va, VA);
     test_default!(test_default_fa, FA);
+    test_default!(test_default_fao, FAO);
     test_default!(test_default_vu, VU);
     test_default!(test_default_fu, FU);
 
@@ -742,6 +848,7 @@ pub mod tests {
 
     test_quickcheck_ascii!(test_quickcheck_va, VA);
     test_quickcheck_ascii!(test_quickcheck_fa, FA);
+    test_quickcheck_ascii!(test_quickcheck_fao, FAO);
 
     macro_rules! test_quickcheck_unicode {
         ($test_name:ident, $ty:ident) => {

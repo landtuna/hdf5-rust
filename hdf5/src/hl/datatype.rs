@@ -9,8 +9,8 @@ use hdf5_sys::h5t::{
     H5Tcompiler_conv, H5Tcopy, H5Tcreate, H5Tenum_create, H5Tenum_insert, H5Tequal, H5Tfind,
     H5Tget_array_dims2, H5Tget_array_ndims, H5Tget_class, H5Tget_cset, H5Tget_member_name,
     H5Tget_member_offset, H5Tget_member_type, H5Tget_member_value, H5Tget_nmembers, H5Tget_order,
-    H5Tget_sign, H5Tget_size, H5Tget_super, H5Tinsert, H5Tis_variable_str, H5Tset_cset,
-    H5Tset_size, H5Tset_strpad, H5Tvlen_create, H5T_VARIABLE,
+    H5Tget_sign, H5Tget_size, H5Tget_strpad, H5Tget_super, H5Tinsert, H5Tis_variable_str,
+    H5Tset_cset, H5Tset_size, H5Tset_strpad, H5Tvlen_create, H5T_VARIABLE,
 };
 use hdf5_types::{
     CompoundField, CompoundType, EnumMember, EnumType, FloatSize, H5Type, IntSize, TypeDescriptor,
@@ -289,11 +289,17 @@ impl Datatype {
                 H5T_class_t::H5T_STRING => {
                     let is_variable = h5try!(H5Tis_variable_str(id)) == 1;
                     let encoding = h5lock!(H5Tget_cset(id));
-                    match (is_variable, encoding) {
-                        (false, H5T_cset_t::H5T_CSET_ASCII) => Ok(TD::FixedAscii(size)),
-                        (false, H5T_cset_t::H5T_CSET_UTF8) => Ok(TD::FixedUnicode(size)),
-                        (true, H5T_cset_t::H5T_CSET_ASCII) => Ok(TD::VarLenAscii),
-                        (true, H5T_cset_t::H5T_CSET_UTF8) => Ok(TD::VarLenUnicode),
+                    let padding = h5lock!(H5Tget_strpad(id));
+                    match (is_variable, encoding, padding) {
+                        (false, H5T_cset_t::H5T_CSET_ASCII, H5T_str_t::H5T_STR_NULLPAD) => {
+                            Ok(TD::FixedAscii(size))
+                        }
+                        (false, H5T_cset_t::H5T_CSET_ASCII, H5T_str_t::H5T_STR_NULLTERM) => {
+                            Ok(TD::FixedAsciiOdim(size))
+                        }
+                        (false, H5T_cset_t::H5T_CSET_UTF8, _) => Ok(TD::FixedUnicode(size)),
+                        (true, H5T_cset_t::H5T_CSET_ASCII, _) => Ok(TD::VarLenAscii),
+                        (true, H5T_cset_t::H5T_CSET_UTF8, _) => Ok(TD::VarLenUnicode),
                         _ => Err("Invalid encoding for string datatype".into()),
                     }
                 }
@@ -321,6 +327,15 @@ impl Datatype {
                 H5T_str_t::H5T_STR_NULLPAD
             };
             let size = size.unwrap_or(H5T_VARIABLE);
+            h5try!(H5Tset_cset(string_id, encoding));
+            h5try!(H5Tset_strpad(string_id, padding));
+            h5try!(H5Tset_size(string_id, size));
+            Ok(string_id)
+        }
+
+        unsafe fn string_type_odim(size: usize, encoding: H5T_cset_t) -> Result<hid_t> {
+            let string_id = h5try!(H5Tcopy(*H5T_C_S1));
+            let padding = H5T_str_t::H5T_STR_NULLTERM;
             h5try!(H5Tset_cset(string_id, encoding));
             h5try!(H5Tset_strpad(string_id, padding));
             h5try!(H5Tset_size(string_id, size));
@@ -403,6 +418,7 @@ impl Datatype {
                     Ok(h5try!(H5Tarray_create2(elem_dt.id(), 1, addr_of!(dims))))
                 }
                 TD::FixedAscii(size) => string_type(Some(size), H5T_cset_t::H5T_CSET_ASCII),
+                TD::FixedAsciiOdim(size) => string_type_odim(size, H5T_cset_t::H5T_CSET_ASCII),
                 TD::FixedUnicode(size) => string_type(Some(size), H5T_cset_t::H5T_CSET_UTF8),
                 TD::VarLenArray(ref ty) => {
                     let elem_dt = Self::from_descriptor(ty)?;

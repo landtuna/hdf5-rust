@@ -18,6 +18,7 @@ struct A {
 struct B {
     a: [A; 4],
     b: FixedAscii<8>,
+    bo: FixedAsciiOdim<8>,
     c: VarLenArray<f64>,
     d: bool,
     e: FixedUnicode<7>,
@@ -103,6 +104,7 @@ fn test_compound_complex() {
             fields: vec![
                 CompoundField::new("a", TD::FixedArray(Box::new(A::type_descriptor()), 4), 0, 0),
                 CompoundField::new("b", TD::FixedAscii(8), 64, 1),
+                CompoundField::new("bo", TD::FixedAsciiOdim(8), 64, 1),
                 CompoundField::new("c", TD::VarLenArray(Box::new(TD::Float(FloatSize::U8))), 72, 2),
                 CompoundField::new("d", TD::Boolean, 88, 3),
                 CompoundField::new("e", TD::FixedUnicode(7), 89, 4),

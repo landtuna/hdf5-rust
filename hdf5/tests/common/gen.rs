@@ -2,7 +2,9 @@ use std::convert::TryFrom;
 use std::fmt::{self, Debug};
 use std::iter;
 
-use hdf5::types::{FixedAscii, FixedUnicode, VarLenArray, VarLenAscii, VarLenUnicode};
+use hdf5::types::{
+    FixedAscii, FixedAsciiOdim, FixedUnicode, VarLenArray, VarLenAscii, VarLenUnicode,
+};
 use hdf5::H5Type;
 use hdf5_metno as hdf5;
 
@@ -140,6 +142,18 @@ impl<const N: usize> Gen for FixedAscii<N> {
     }
 }
 
+impl<const N: usize> Gen for FixedAsciiOdim<N> {
+    fn gen<R: Rng + ?Sized>(rng: &mut R) -> Self {
+        let len = rng.sample(Uniform::new_inclusive(0, N));
+        let dist = Uniform::new_inclusive(0, 127);
+        let mut v = Vec::with_capacity(len);
+        for _ in 0..len {
+            v.push(rng.sample(dist));
+        }
+        unsafe { FixedAsciiOdim::from_ascii_unchecked(&v) }
+    }
+}
+
 impl<const N: usize> Gen for FixedUnicode<N> {
     fn gen<R: Rng + ?Sized>(rng: &mut R) -> Self {
         let len = rng.sample(Uniform::new_inclusive(0, N));
@@ -221,6 +235,7 @@ impl Gen for TupleStruct {
 #[repr(C)]
 pub struct FixedStruct {
     fa: FixedAscii<3>,
+    fao: FixedAsciiOdim<3>,
     fu: FixedUnicode<11>,
     tuple: (i8, u64, f32),
     array: [TupleStruct; 2],
@@ -230,6 +245,7 @@ impl Gen for FixedStruct {
     fn gen<R: Rng + ?Sized>(rng: &mut R) -> Self {
         FixedStruct {
             fa: Gen::gen(rng),
+            fao: Gen::gen(rng),
             fu: Gen::gen(rng),
             tuple: (Gen::gen(rng), Gen::gen(rng), Gen::gen(rng)),
             array: [Gen::gen(rng), Gen::gen(rng)],
